@@ -4,7 +4,7 @@
   "type": "module",
   "engines": { "node": ">=18" },
   "scripts": {
-    "dev": "netlify dev",        // runs Vite + functions locally
+    "dev": "netlify dev",
     "build": "vite build",
     "preview": "vite preview"
   },
