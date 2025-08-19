@@ -1,10 +1,9 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import AveryChat from "./AveryChat.jsx";
-import './index.css'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import GenZChatDemo from "./GenZChatDemo.jsx";
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AveryChat />
-  </React.StrictMode>,
-)
+    <GenZChatDemo />
+  </React.StrictMode>
+);
