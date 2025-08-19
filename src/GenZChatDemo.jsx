@@ -311,7 +311,7 @@ export default function GenZChatDemo() {
               onInput={resizeTextarea}
             />
             <div className="flex items-center justify-between px-1">
-              <div className="text-[11px] text-neutral-400">Press Enter to send • Shift+Enter = new line</div>
+              <div className="text-[11px] text-neutral-400">Press Enter to send • Shift+Enter for new line</div>
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || sending}
