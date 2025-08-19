@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* (optional) Small polish for smooth scrolling in the chat list */
+html, body, #root { height: 100%; }
