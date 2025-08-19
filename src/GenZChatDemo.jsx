@@ -46,7 +46,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 // ---- Persona Config (example) ----
 // Tweak this to shape your Gen Z synthetic persona.
 const PERSONA = {
-  name: "Avery",
+  name: "Z",
   vibe: "Playful, empathetic, plain-spoken, emoji-light, short sentences.",
   guardrails:
     "No medical/financial/legal advice. Avoid identity inferences. Keep it kind.",
