@@ -115,6 +115,7 @@ export default function GenZChatDemo() {
   const [input, setInput] = useState("");
   const [showTypingIndicator, setShowTypingIndicator] = useState(false);
   const typingTimerRef = useRef(null);
+  const assistantBufferRef = useRef("");
   const [sending, setSending] = useState(false);
   const listRef = useRef(null);
   const textareaRef = useRef(null);
@@ -126,7 +127,7 @@ export default function GenZChatDemo() {
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, isAssistantTyping]);
+  }, [messages, showTypingIndicator]);
 
   // Autosize textarea
   const resizeTextarea = () => {
@@ -168,16 +169,22 @@ export default function GenZChatDemo() {
 
     // 3) Kick off assistant reply (streaming simulation)
     await simulateAssistantReply(trimmed, {
-      onTypingStart: () => setIsAssistantTyping(true),
-      onChunk: (chunk) => appendToAssistantMessage(chunk),
+      onChunk: (chunk) => {
+        // Accumulate tokens silently; we'll render the bubble all at once onDone
+        assistantBufferRef.current += chunk;
+      },
       onDone: () => {
-        // Consider the user's last message read once assistant replies
+        // Commit one assistant bubble with the full text
+        commitAssistantMessage(assistantBufferRef.current);
+        assistantBufferRef.current = "";
         markStatus(newMsgId, "read", 0);
-        setIsAssistantTyping(false);
+        if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+        setShowTypingIndicator(false);
         setSending(false);
       },
       onError: () => {
-        setIsAssistantTyping(false);
+        if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+        setShowTypingIndicator(false);
         setSending(false);
         markStatus(newMsgId, "failed", 0);
       },
@@ -193,55 +200,29 @@ export default function GenZChatDemo() {
     }, delayMs);
   };
 
-  // Append or create the assistant streaming message
-  const appendToAssistantMessage = (chunk) => {
-    setMessages((prev) => {
-      const last = prev[prev.length - 1];
-      if (last?.role === "assistant" && last._streaming) {
-        const updated = { ...last, text: last.text + chunk };
-        return [...prev.slice(0, -1), updated];
-      }
-      return [
-        ...prev,
-        {
-          id: uid(),
-          role: "assistant",
-          text: chunk,
-          timestamp: Date.now(),
-          _streaming: true,
-        },
-      ];
-    });
-  };
-
-  // Finalize streaming assistant message (remove _streaming flag)
-  const finalizeAssistantMessage = () => {
-    setMessages((prev) => {
-      const last = prev[prev.length - 1];
-      if (last?.role === "assistant" && last._streaming) {
-        const updated = { ...last, _streaming: undefined };
-        return [...prev.slice(0, -1), updated];
-      }
-      return prev;
-    });
+  // Assistant message: commit a full reply at once (no streaming UI)
+  const commitAssistantMessage = (fullText) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: uid(), role: "assistant", text: fullText, timestamp: Date.now() },
+    ]);
   };
 
   // Simulated streaming assistant (replace with your backend integration)
-  async function simulateAssistantReply(userText, { onTypingStart, onChunk, onDone, onError }) {
+  async function simulateAssistantReply(userText, { onChunk, onDone, onError }) {
     try {
-      onTypingStart?.();
-      const reply = toyPersonaReply(userText);
+            const reply = toyPersonaReply(userText);
       // stream it character-by-character
       for (let i = 0; i < reply.length; i++) {
         await new Promise((r) => setTimeout(r, 10 + Math.random() * 25));
         onChunk?.(reply[i]);
       }
-      finalizeAssistantMessage();
       onDone?.();
     } catch (e) {
       onError?.(e);
     }
   }
+
 
   function toyPersonaReply(text) {
     // Cheeky heuristic just for the demo
@@ -284,7 +265,7 @@ export default function GenZChatDemo() {
           </div>
           <div className="flex flex-col">
             <div className="font-semibold leading-tight">Texting with {PERSONA.name}</div>
-            <div className="text-xs text-neutral-500">Gen Z Persona • Online</div>
+            <div className="text-xs text-neutral-500">Gen Z • Online</div>
           </div>
         </div>
 
@@ -323,7 +304,7 @@ export default function GenZChatDemo() {
               ref={textareaRef}
               rows={1}
               className="w-full resize-none outline-none placeholder:text-neutral-400 bg-transparent px-2 py-1 text-[15px]"
-              placeholder="Text {PERSONA.name}…"
+              placeholder="Type your message…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
