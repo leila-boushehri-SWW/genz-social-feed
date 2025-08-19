@@ -1,11 +1,5 @@
+/* src/index.css */
 @import "tailwindcss";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
-html, body {
-  overflow-x: hidden;
-}
-
-/* (optional) Small polish for smooth scrolling in the chat list */
+/* optional small global */
 html, body, #root { height: 100%; }
