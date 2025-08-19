@@ -1,4 +1,4 @@
-// Gen Z SMS-like Web Chat — Starter Kit (Single-File React)
+// Gen Z Chat
 // ---------------------------------------------------------
 // What this is:
 // • A mobile-first, SMS-style web chat you can drop into any React app.
@@ -46,7 +46,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 // ---- Persona Config (example) ----
 // Tweak this to shape your Gen Z synthetic persona.
 const PERSONA = {
-  name: "Zo",
+  name: "Avery",
   vibe: "Playful, empathetic, plain-spoken, emoji-light, short sentences.",
   guardrails:
     "No medical/financial/legal advice. Avoid identity inferences. Keep it kind.",
@@ -68,27 +68,19 @@ function formatTime(ts) {
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 // Minimal local store (per tab)
-const STORAGE_KEY = "genz-chat-v2";
-const STATE_VERSION = 2;
+const STORAGE_KEY = "genz-chat-demo";
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (obj?.version !== STATE_VERSION) return null; // reset on version change
-    return obj;
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    return null;
-  }
-} catch {
     return null;
   }
 }
 function saveState(state) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {}
-} catch {}
 }
 
 // ---- SVG icons (check marks) ----
@@ -116,9 +108,9 @@ const TypingDots = () => (
 export default function GenZChatDemo() {
   const [messages, setMessages] = useState(() => {
     const persisted = loadState();
-    const initial = persisted?.messages || [];
-    const hasUser = initial.some((m) => m.role === "user");
-    return hasUser ? initial : [];
+    return (
+      persisted?.messages || []
+    );
   });
   const [input, setInput] = useState("");
   const [showTypingIndicator, setShowTypingIndicator] = useState(false);
@@ -208,42 +200,16 @@ export default function GenZChatDemo() {
     }, delayMs);
   };
 
-  // Append or create the assistant streaming message
+  // Assistant message: commit a full reply at once (no streaming UI)
   const commitAssistantMessage = (fullText) => {
     setMessages((prev) => [
       ...prev,
       { id: uid(), role: "assistant", text: fullText, timestamp: Date.now() },
     ]);
   };
-        return [...prev.slice(0, -1), updated];
-      }
-      return [
-        ...prev,
-        {
-          id: uid(),
-          role: "assistant",
-          text: chunk,
-          timestamp: Date.now(),
-          _streaming: true,
-        },
-      ];
-    });
-  };
-
-  // Finalize streaming assistant message (remove _streaming flag)
-  const finalizeAssistantMessage = () => {
-    setMessages((prev) => {
-      const last = prev[prev.length - 1];
-      if (last?.role === "assistant" && last._streaming) {
-        const updated = { ...last, _streaming: undefined };
-        return [...prev.slice(0, -1), updated];
-      }
-      return prev;
-    });
-  };
 
   // Simulated streaming assistant (replace with your backend integration)
-  async function simulateAssistantReply(userText, { onTypingStart, onChunk, onDone, onError }) {
+  async function simulateAssistantReply(userText, { onChunk, onDone, onError }) {
     try {
             const reply = toyPersonaReply(userText);
       // stream it character-by-character
@@ -251,12 +217,12 @@ export default function GenZChatDemo() {
         await new Promise((r) => setTimeout(r, 10 + Math.random() * 25));
         onChunk?.(reply[i]);
       }
-      finalizeAssistantMessage();
       onDone?.();
     } catch (e) {
       onError?.(e);
     }
   }
+
 
   function toyPersonaReply(text) {
     // Cheeky heuristic just for the demo
@@ -299,7 +265,7 @@ export default function GenZChatDemo() {
           </div>
           <div className="flex flex-col">
             <div className="font-semibold leading-tight">Texting with {PERSONA.name}</div>
-            <div className="text-xs text-neutral-500">Gen Z Persona • Online</div>
+            <div className="text-xs text-neutral-500">Gen Z • Online</div>
           </div>
         </div>
 
@@ -338,7 +304,7 @@ export default function GenZChatDemo() {
               ref={textareaRef}
               rows={1}
               className="w-full resize-none outline-none placeholder:text-neutral-400 bg-transparent px-2 py-1 text-[15px]"
-              placeholder="Text {PERSONA.name}…"
+              placeholder="Type your message…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
@@ -396,8 +362,8 @@ function MessageBubble({ msg }) {
     <div className={"flex my-1 " + (isUser ? "justify-end" : "items-end gap-2") }>
       {!isUser && <Avatar />}
       <div className="max-w-[78%] min-w-0">
-        <div className={`px-3 py-2 shadow-sm transition-none ${bubbleClass}`}>
-          <div className="whitespace-pre-wrap leading-snug text-[15px] break-words">{msg.text}</div>
+        <div className={`px-3 py-2 shadow-sm ${bubbleClass}`}>
+          <div className="whitespace-pre-wrap leading-snug text-[15px] break-words" >{msg.text}</div>
         </div>
         <div className={"flex items-center gap-1 mt-0.5 " + (isUser ? "justify-end" : "justify-start")}>
           <span className="text-[10px] text-neutral-400">{formatTime(msg.timestamp)}</span>
