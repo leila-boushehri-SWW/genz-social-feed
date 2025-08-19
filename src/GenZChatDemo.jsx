@@ -141,7 +141,7 @@ export default function GenZChatDemo() {
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200">
           <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 flex items-center justify-center text-white font-semibold">
-            Z
+            A
             <span className="absolute -right-0 -bottom-0 w-3 h-3 rounded-full bg-green-500 ring-2 ring-white" aria-label="online" />
           </div>
           <div className="flex flex-col">
