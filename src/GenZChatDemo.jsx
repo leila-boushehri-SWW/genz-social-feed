@@ -46,7 +46,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 // ---- Persona Config (example) ----
 // Tweak this to shape your Gen Z synthetic persona.
 const PERSONA = {
-  name: "Avery",
+  name: "Z",
   vibe: "Playful, empathetic, plain-spoken, emoji-light, short sentences.",
   guardrails:
     "No medical/financial/legal advice. Avoid identity inferences. Keep it kind.",
@@ -116,7 +116,16 @@ export default function GenZChatDemo() {
   const [showTypingIndicator, setShowTypingIndicator] = useState(false);
   const typingTimerRef = useRef(null);
   const assistantBufferRef = useRef("");
-  const [sending, setSending] = useState(false);
+  
+  // Persist an OpenAI Assistants thread per browser (so the assistant has context)
+  const THREAD_KEY = "genz-thread-id";
+  const [threadId, setThreadId] = useState(() => {
+    try { return localStorage.getItem(THREAD_KEY); } catch { return null; }
+  });
+  useEffect(() => {
+    try { if (threadId) localStorage.setItem(THREAD_KEY, threadId); } catch {}
+  }, [threadId]);
+const [sending, setSending] = useState(false);
   const listRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -137,6 +146,27 @@ export default function GenZChatDemo() {
     ta.style.height = ta.scrollHeight + "px";
   };
   useEffect(() => resizeTextarea(), [input]);
+
+  
+  // ---- OpenAI Assistants integration via Netlify Function ----
+  async function callAssistant(text) {
+    const res = await fetch("/api/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        threadId,
+        assistantId: import.meta?.env?.VITE_ASSISTANT_ID || undefined,
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(errText || "Assistant call failed");
+    }
+    const data = await res.json();
+    if (data.threadId && data.threadId !== threadId) setThreadId(data.threadId);
+    return data.reply || "";
+  }
 
   // ---- Sending flow ----
   const handleSend = async () => {
@@ -168,27 +198,18 @@ export default function GenZChatDemo() {
     markStatus(newMsgId, "delivered", 600);
 
     // 3) Kick off assistant reply (streaming simulation)
-    await simulateAssistantReply(trimmed, {
-      onChunk: (chunk) => {
-        // Accumulate tokens silently; we'll render the bubble all at once onDone
-        assistantBufferRef.current += chunk;
-      },
-      onDone: () => {
-        // Commit one assistant bubble with the full text
-        commitAssistantMessage(assistantBufferRef.current);
-        assistantBufferRef.current = "";
-        markStatus(newMsgId, "read", 0);
-        if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
-        setShowTypingIndicator(false);
-        setSending(false);
-      },
-      onError: () => {
-        if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
-        setShowTypingIndicator(false);
-        setSending(false);
-        markStatus(newMsgId, "failed", 0);
-      },
-    });
+    try {
+      const reply = await callAssistant(trimmed);
+      commitAssistantMessage(reply);
+      markStatus(newMsgId, "read", 0);
+    } catch (e) {
+      console.error(e);
+      markStatus(newMsgId, "failed", 0);
+    } finally {
+      if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+      setShowTypingIndicator(false);
+      setSending(false);
+    }
   };
 
   // Update message status with optional delay
