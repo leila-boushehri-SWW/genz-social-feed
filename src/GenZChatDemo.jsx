@@ -1,4 +1,4 @@
-// Gen Z SMS-like Web Chat — Starter Kit (Single-File React)
+// Gen Z Chat
 // ---------------------------------------------------------
 // What this is:
 // • A mobile-first, SMS-style web chat you can drop into any React app.
@@ -46,7 +46,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 // ---- Persona Config (example) ----
 // Tweak this to shape your Gen Z synthetic persona.
 const PERSONA = {
-  name: "Zo",
+  name: "Z",
   vibe: "Playful, empathetic, plain-spoken, emoji-light, short sentences.",
   guardrails:
     "No medical/financial/legal advice. Avoid identity inferences. Keep it kind.",
@@ -109,18 +109,12 @@ export default function GenZChatDemo() {
   const [messages, setMessages] = useState(() => {
     const persisted = loadState();
     return (
-      persisted?.messages || [
-        {
-          id: uid(),
-          role: "assistant",
-          text: `Hey! I'm ${PERSONA.name} — your Gen Z persona. What are we exploring today?`,
-          timestamp: Date.now(),
-        },
-      ]
+      persisted?.messages || []
     );
   });
   const [input, setInput] = useState("");
-  const [isAssistantTyping, setIsAssistantTyping] = useState(false);
+  const [showTypingIndicator, setShowTypingIndicator] = useState(false);
+  const typingTimerRef = useRef(null);
   const [sending, setSending] = useState(false);
   const listRef = useRef(null);
   const textareaRef = useRef(null);
@@ -162,6 +156,11 @@ export default function GenZChatDemo() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setSending(true);
+
+    // Schedule a delayed typing indicator — only shows if reply takes a moment
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    setShowTypingIndicator(false);
+    typingTimerRef.current = setTimeout(() => setShowTypingIndicator(true), 700);
 
     // 2) Simulate server ACK ('sent'), then 'delivered'. Replace this with your API.
     markStatus(newMsgId, "sent", 200);
@@ -275,8 +274,8 @@ export default function GenZChatDemo() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-neutral-100 text-neutral-900">
-      <div className="w-full max-w-md h-[92vh] sm:h-[90vh] bg-white rounded-3xl shadow-xl overflow-hidden border border-neutral-200">
+    <div className="flex items-center justify-center min-h-[100dvh] overflow-x-hidden bg-neutral-100 text-neutral-900">
+      <div className="w-full max-w-md h-[100dvh] sm:h-[90dvh] bg-white rounded-3xl shadow-xl overflow-hidden border border-neutral-200 flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200">
           <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 flex items-center justify-center text-white font-semibold">
@@ -292,7 +291,7 @@ export default function GenZChatDemo() {
         {/* Messages */}
         <div
           ref={listRef}
-          className="h-[calc(100%-8rem)] overflow-y-auto px-3 py-4 bg-neutral-50"
+          className="flex-1 overflow-y-auto px-3 py-4 bg-neutral-50 overflow-x-hidden"
           aria-live="polite"
           aria-relevant="additions"
         >
@@ -301,10 +300,10 @@ export default function GenZChatDemo() {
             <MessageBubble key={m.id} msg={m} />
           ))}
 
-          {isAssistantTyping && (
+          {showTypingIndicator && (
             <div className="flex items-end gap-2 my-1">
               <Avatar />
-              <div className="max-w-[78%] bg-neutral-300 text-neutral-900 px-3 py-2 rounded-2xl rounded-tl-md shadow-sm">
+              <div className="max-w-[78%] min-w-0 bg-neutral-300 text-neutral-900 px-3 py-2 rounded-2xl rounded-tl-md shadow-sm">
                 <TypingDots />
               </div>
             </div>
@@ -314,7 +313,7 @@ export default function GenZChatDemo() {
         </div>
 
         {/* Composer */}
-        <div className="px-3 pb-[env(safe-area-inset-bottom)]">
+        <div className="px-3 pb-[env(safe-area-inset-bottom)] pb-3 bg-white">
           <div className="m-2 p-2 border border-neutral-200 rounded-2xl bg-white shadow-sm">
             <label htmlFor="composer" className="sr-only">
               Message input
@@ -381,9 +380,9 @@ function MessageBubble({ msg }) {
   return (
     <div className={"flex my-1 " + (isUser ? "justify-end" : "items-end gap-2") }>
       {!isUser && <Avatar />}
-      <div className="max-w-[78%]">
+      <div className="max-w-[78%] min-w-0">
         <div className={`px-3 py-2 shadow-sm ${bubbleClass}`}>
-          <div className="whitespace-pre-wrap leading-snug text-[15px]">{msg.text}</div>
+          <div className="whitespace-pre-wrap leading-snug text-[15px] break-words" >{msg.text}</div>
         </div>
         <div className={"flex items-center gap-1 mt-0.5 " + (isUser ? "justify-end" : "justify-start")}>
           <span className="text-[10px] text-neutral-400">{formatTime(msg.timestamp)}</span>
