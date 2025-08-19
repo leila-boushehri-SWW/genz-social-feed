@@ -145,7 +145,7 @@ export default function GenZChatDemo() {
             <span className="absolute -right-0 -bottom-0 w-3 h-3 rounded-full bg-green-500 ring-2 ring-white" aria-label="online" />
           </div>
           <div className="flex flex-col">
-            <div className="font-semibold leading-tight">Texting with {PERSONA.name}</div>
+            <div className="font-semibold leading-tight">{PERSONA.name}</div>
             <div className="text-xs text-neutral-500">Gen Z • Online</div>
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function GenZChatDemo() {
             <label htmlFor="composer" className="sr-only">Message input</label>
             <textarea id="composer" ref={textareaRef} rows={1} className="w-full resize-none outline-none placeholder:text-neutral-400 bg-transparent px-2 py-1 text-[15px]" placeholder="Type your message…" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} onInput={resizeTextarea} />
             <div className="flex items-center justify-between px-1">
-              <div className="text-[11px] text-neutral-400">Press Enter to send • Shift+Enter = new line</div>
+              <div className="text-[11px] text-neutral-400">Press Enter to send • Shift+Enter for new line</div>
               <button onClick={handleSend} disabled={!input.trim() || sending} className="px-3 py-1.5 text-sm rounded-full bg-neutral-900 text-white disabled:opacity-30" aria-label="Send message">Send</button>
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function GenZChatDemo() {
 
 function Avatar() {
   return (
-    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-white text-xs font-semibold grid place-items-center select-none">Z</div>
+    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-white text-xs font-semibold grid place-items-center select-none">A</div>
   );
 }
 
