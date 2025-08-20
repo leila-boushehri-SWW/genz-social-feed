@@ -1,5 +1,7 @@
-// assistant.mts — Updated for reliability
 import { Configuration, OpenAIApi } from "openai-edge";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const openai = new OpenAIApi(new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -7,9 +9,7 @@ const openai = new OpenAIApi(new Configuration({
 
 const threadMap = new Map<string, string>();
 
-export const config = {
-  runtime: "edge",
-};
+export const config = { runtime: "edge" };
 
 export default async function handler(req: Request) {
   if (req.method !== "POST") {
@@ -18,6 +18,8 @@ export default async function handler(req: Request) {
 
   try {
     const { text, threadId, sessionId } = await req.json();
+
+    console.log("🟡 Incoming request", { text, threadId, sessionId });
 
     if (!text || !sessionId) {
       return new Response("Missing 'text' or 'sessionId'", { status: 400 });
@@ -29,25 +31,21 @@ export default async function handler(req: Request) {
       const thread = await openai.beta.threads.create();
       finalThreadId = thread.id;
       threadMap.set(sessionId, finalThreadId);
+      console.log("🧵 Created new thread:", finalThreadId);
     }
 
-    // Create user message
     await openai.beta.threads.messages.create(finalThreadId, {
       role: "user",
       content: text,
     });
 
-    // Run assistant
     const run = await openai.beta.threads.runs.create(finalThreadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID!,
     });
 
-    console.log(\"🤖 Using assistant ID:\", process.env.OPENAI_ASSISTANT_ID);
-    
-    // Poll until completed or failed
     let runStatus = run;
-    for (let i = 0; i < 20; i++) {
-      await new Promise(res => setTimeout(res, 1000));
+    for (let i = 0; i < 30; i++) {
+      await new Promise((res) => setTimeout(res, 1000));
       runStatus = await openai.beta.threads.runs.retrieve(finalThreadId, run.id);
       if (runStatus.status === "completed" || runStatus.status === "failed") break;
     }
@@ -59,20 +57,22 @@ export default async function handler(req: Request) {
       });
     }
 
-    // Fetch latest assistant message
     const messages = await openai.beta.threads.messages.list(finalThreadId);
-    const assistantMessages = messages.data.filter(m => m.role === "assistant");
-    const latest = assistantMessages[0];
+    const assistantMessages = messages.data.filter((m) => m.role === "assistant");
 
+    const latest = assistantMessages[0];
     const fullText = latest?.content
       ?.map((c: any) => (c.type === "text" ? c.text.value : ""))
-      .join("\n") ?? "(no response)";
+      .join("\n") || "(no response)";
+
+    console.log("✅ Final reply:", fullText);
 
     return new Response(JSON.stringify({ reply: fullText, threadId: finalThreadId }), {
       headers: { "content-type": "application/json" },
     });
+
   } catch (err: any) {
-    console.error("/api/assistant error:", err);
+    console.error("❌ API error:", err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
       headers: { "content-type": "application/json" },
