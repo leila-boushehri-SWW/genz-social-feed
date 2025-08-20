@@ -94,7 +94,17 @@ export default function GenZChatDemo() {
   };
 
   const commitAssistantMessage = (fullText) => {
-    setMessages((prev) => [...prev, { id: uid(), role: "assistant", text: fullText, timestamp: Date.now() }]);
+    const parts = fullText.split('\n').filter((line) => line.trim() !== "");
+  
+    const now = Date.now();
+    const messagesToAdd = parts.map((text, i) => ({
+      id: uid(),
+      role: "assistant",
+      text: text.trim(),
+      timestamp: now + i, // slightly stagger timestamps for visual order
+    }));
+  
+    setMessages((prev) => [...prev, ...messagesToAdd]);
   };
 
   const handleSend = async () => {
