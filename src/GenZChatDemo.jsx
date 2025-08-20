@@ -97,14 +97,24 @@ export default function GenZChatDemo() {
     const parts = fullText.split('\n').filter((line) => line.trim() !== "");
   
     const now = Date.now();
-    const messagesToAdd = parts.map((text, i) => ({
-      id: uid(),
-      role: "assistant",
-      text: text.trim(),
-      timestamp: now + i, // slightly stagger timestamps for visual order
-    }));
+    let delay = 0;
   
-    setMessages((prev) => [...prev, ...messagesToAdd]);
+    parts.forEach((text, i) => {
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "assistant",
+            text: text.trim(),
+            timestamp: now + i, // slight timestamp offset
+          },
+        ]);
+      }, delay);
+  
+      // Adjust delay per message (e.g., 600ms between each bubble)
+      delay += 600;
+    });
   };
 
   const handleSend = async () => {
