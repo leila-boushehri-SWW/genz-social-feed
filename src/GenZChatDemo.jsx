@@ -23,6 +23,17 @@ function loadState() {
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
+
+const SESSION_KEY = "genz-chat-session";
+function getSessionId() {
+  let sessionId = localStorage.getItem(SESSION_KEY);
+  if (!sessionId) {
+    sessionId = "sess_" + Math.random().toString(36).slice(2) + Date.now();
+    localStorage.setItem(SESSION_KEY, sessionId);
+  }
+  return sessionId;
+}
+
 function saveState(state) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
 }
@@ -54,16 +65,23 @@ const TypingDots = () => (
 
 // ---- Server call ----
 async function callAssistantEndpoint({ text, threadId }) {
+  const sessionId = getSessionId();
+
   const res = await fetch("/api/assistant", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text, threadId }),
+    body: JSON.stringify({ text, threadId, sessionId }),
   });
+
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
     throw new Error(msg);
   }
+
   return res.json(); // { reply, threadId }
 }
 
