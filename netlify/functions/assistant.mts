@@ -1,12 +1,10 @@
-// assistant.mts — Patched for Multi-Session Thread Support
+// assistant.mts — Updated for reliability
 import { Configuration, OpenAIApi } from "openai-edge";
-import { OpenAIStream, StreamingTextResponse } from "ai";
 
 const openai = new OpenAIApi(new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 }));
 
-// In-memory thread storage (temporary — use DB in prod)
 const threadMap = new Map<string, string>();
 
 export const config = {
@@ -22,40 +20,51 @@ export default async function handler(req: Request) {
     const { text, threadId, sessionId } = await req.json();
 
     if (!text || !sessionId) {
-      return new Response("Missing 'text' or 'sessionId' in body", { status: 400 });
+      return new Response("Missing 'text' or 'sessionId'", { status: 400 });
     }
 
     let finalThreadId = threadId || threadMap.get(sessionId);
 
-    // Create new thread if needed
     if (!finalThreadId) {
       const thread = await openai.beta.threads.create();
       finalThreadId = thread.id;
       threadMap.set(sessionId, finalThreadId);
     }
 
-    // Send message to the thread
+    // Create user message
     await openai.beta.threads.messages.create(finalThreadId, {
       role: "user",
       content: text,
     });
 
-    // Run the assistant
+    // Run assistant
     const run = await openai.beta.threads.runs.create(finalThreadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID!,
     });
 
-    // Poll until the run is complete
+    // Poll until completed or failed
     let runStatus = run;
-    while (runStatus.status !== "completed") {
-      await new Promise((res) => setTimeout(res, 800));
+    for (let i = 0; i < 20; i++) {
+      await new Promise(res => setTimeout(res, 1000));
       runStatus = await openai.beta.threads.runs.retrieve(finalThreadId, run.id);
+      if (runStatus.status === "completed" || runStatus.status === "failed") break;
     }
 
-    // Retrieve the messages
+    if (runStatus.status !== "completed") {
+      return new Response(JSON.stringify({ error: "Assistant run did not complete" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    // Fetch latest assistant message
     const messages = await openai.beta.threads.messages.list(finalThreadId);
-    const lastMessage = messages.data.find(m => m.role === "assistant");
-    const fullText = lastMessage?.content?.map(c => (c.type === "text" ? c.text.value : "")).join("\n");
+    const assistantMessages = messages.data.filter(m => m.role === "assistant");
+    const latest = assistantMessages[0];
+
+    const fullText = latest?.content
+      ?.map((c: any) => (c.type === "text" ? c.text.value : ""))
+      .join("\n") ?? "(no response)";
 
     return new Response(JSON.stringify({ reply: fullText, threadId: finalThreadId }), {
       headers: { "content-type": "application/json" },
