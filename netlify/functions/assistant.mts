@@ -1,81 +1,57 @@
-import { Configuration, OpenAIApi } from "openai-edge";
-import dotenv from "dotenv";
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
-dotenv.config();
+const handler: Handler = async (event) => {
+  const { text, threadId, sessionId } = JSON.parse(event.body || "{}");
 
-const openai = new OpenAIApi(new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-}));
-
-const threadMap = new Map<string, string>();
-
-export const config = { runtime: "edge" };
-
-export default async function handler(req: Request) {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  if (!text || !sessionId) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "Missing 'text' or 'sessionId'." }),
+    };
   }
 
-  try {
-    const { text, threadId, sessionId } = await req.json();
+  let thread = threadId
+    ? { id: threadId }
+    : await openai.beta.threads.create();
 
-    console.log("🟡 Incoming request", { text, threadId, sessionId });
+  // Ensure the assistant exists
+  const assistant = await openai.beta.assistants.retrieve(OPENAI_ASSISTANT_ID);
 
-    if (!text || !sessionId) {
-      return new Response("Missing 'text' or 'sessionId'", { status: 400 });
+  // Add the message
+  await openai.beta.threads.messages.create(thread.id, {
+    role: "user",
+    content: text,
+  });
+
+  // Run the assistant
+  const run = await openai.beta.threads.runs.create(thread.id, {
+    assistant_id: assistant.id,
+  });
+
+  // Wait for the run to complete (polling)
+  let result;
+  while (true) {
+    const status = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    if (status.status === "completed") {
+      result = status;
+      break;
     }
-
-    let finalThreadId = threadId || threadMap.get(sessionId);
-
-    if (!finalThreadId) {
-      const thread = await openai.beta.threads.create();
-      finalThreadId = thread.id;
-      threadMap.set(sessionId, finalThreadId);
-      console.log("🧵 Created new thread:", finalThreadId);
+    if (status.status === "failed") {
+      throw new Error("Assistant run failed.");
     }
-
-    await openai.beta.threads.messages.create(finalThreadId, {
-      role: "user",
-      content: text,
-    });
-
-    const run = await openai.beta.threads.runs.create(finalThreadId, {
-      assistant_id: process.env.OPENAI_ASSISTANT_ID!,
-    });
-
-    let runStatus = run;
-    for (let i = 0; i < 30; i++) {
-      await new Promise((res) => setTimeout(res, 1000));
-      runStatus = await openai.beta.threads.runs.retrieve(finalThreadId, run.id);
-      if (runStatus.status === "completed" || runStatus.status === "failed") break;
-    }
-
-    if (runStatus.status !== "completed") {
-      return new Response(JSON.stringify({ error: "Assistant run did not complete" }), {
-        status: 500,
-        headers: { "content-type": "application/json" },
-      });
-    }
-
-    const messages = await openai.beta.threads.messages.list(finalThreadId);
-    const assistantMessages = messages.data.filter((m) => m.role === "assistant");
-
-    const latest = assistantMessages[0];
-    const fullText = latest?.content
-      ?.map((c: any) => (c.type === "text" ? c.text.value : ""))
-      .join("\n") || "(no response)";
-
-    console.log("✅ Final reply:", fullText);
-
-    return new Response(JSON.stringify({ reply: fullText, threadId: finalThreadId }), {
-      headers: { "content-type": "application/json" },
-    });
-
-  } catch (err: any) {
-    console.error("❌ API error:", err);
-    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+    await new Promise((r) => setTimeout(r, 1000));
   }
-}
+
+  const messages = await openai.beta.threads.messages.list(thread.id);
+  const reply = messages.data.find((m) => m.role === "assistant")?.content?.[0]?.text?.value || "(no reply)";
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      reply,
+      threadId: thread.id,
+    }),
+  };
+};
+
+export { handler };
