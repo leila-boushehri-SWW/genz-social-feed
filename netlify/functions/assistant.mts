@@ -1,81 +1,70 @@
-// netlify/functions/assistant.mts
-import OpenAI from "openai";
-import type { Context } from "@netlify/functions";
+// assistant.mts — Patched for Multi-Session Thread Support
+import { Configuration, OpenAIApi } from "openai-edge";
+import { OpenAIStream, StreamingTextResponse } from "ai";
 
-export const config = { path: "/api/assistant" };
+const openai = new OpenAIApi(new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+}));
 
-const ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID; // set in Netlify → Site settings → Env
+// In-memory thread storage (temporary — use DB in prod)
+const threadMap = new Map<string, string>();
 
-// Poll helper (simple + reliable on Netlify Functions)
-async function waitForRunCompletion(client: OpenAI, threadId: string, runId: string, { timeoutMs = 120_000, pollMs = 800 } = {}) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const run = await client.beta.threads.runs.retrieve(threadId, runId);
-    if (run.status === "completed") return run;
-    if (["failed", "cancelled", "expired"].includes(run.status as string)) {
-      throw new Error(`Run ended with status: ${run.status}`);
-    }
-    await new Promise((r) => setTimeout(r, pollMs));
+export const config = {
+  runtime: "edge",
+};
+
+export default async function handler(req: Request) {
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
   }
-  throw new Error("Run polling timeout");
-}
 
-export default async (req: Request, _ctx: Context) => {
   try {
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+    const { text, threadId, sessionId } = await req.json();
 
-    if (!ASSISTANT_ID) {
-      return new Response(JSON.stringify({ error: "Missing OPENAI_ASSISTANT_ID env var." }), {
-        status: 500,
-        headers: { "content-type": "application/json" },
-      });
+    if (!text || !sessionId) {
+      return new Response("Missing 'text' or 'sessionId' in body", { status: 400 });
     }
 
-    const { text, threadId: incomingThreadId } = await req.json();
-    if (!text || typeof text !== "string") {
-      return new Response(JSON.stringify({ error: "Missing 'text' string." }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+    let finalThreadId = threadId || threadMap.get(sessionId);
+
+    // Create new thread if needed
+    if (!finalThreadId) {
+      const thread = await openai.beta.threads.create();
+      finalThreadId = thread.id;
+      threadMap.set(sessionId, finalThreadId);
     }
 
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    // 1) Ensure a thread
-    const threadId = incomingThreadId || (await client.beta.threads.create()).id;
-
-    // 2) Add user message
-    await client.beta.threads.messages.create(threadId, {
+    // Send message to the thread
+    await openai.beta.threads.messages.create(finalThreadId, {
       role: "user",
       content: text,
     });
 
-    // 3) Run the assistant
-    const run = await client.beta.threads.runs.create(threadId, {
-      assistant_id: ASSISTANT_ID,
+    // Run the assistant
+    const run = await openai.beta.threads.runs.create(finalThreadId, {
+      assistant_id: process.env.OPENAI_ASSISTANT_ID!,
     });
 
-    // 4) Wait for completion, then fetch the latest assistant message
-    await waitForRunCompletion(client, threadId, run.id);
-
-    const messages = await client.beta.threads.messages.list(threadId, { order: "desc", limit: 10 });
-    const assistantMsg = messages.data.find((m) => m.role === "assistant");
-
-    let replyText = "";
-    if (assistantMsg) {
-      for (const p of assistantMsg.content) {
-        if (p.type === "text" && p.text?.value) replyText += p.text.value;
-      }
+    // Poll until the run is complete
+    let runStatus = run;
+    while (runStatus.status !== "completed") {
+      await new Promise((res) => setTimeout(res, 800));
+      runStatus = await openai.beta.threads.runs.retrieve(finalThreadId, run.id);
     }
 
-    return new Response(
-      JSON.stringify({ reply: replyText || "(no content)", threadId }),
-      { headers: { "content-type": "application/json" } }
-    );
+    // Retrieve the messages
+    const messages = await openai.beta.threads.messages.list(finalThreadId);
+    const lastMessage = messages.data.find(m => m.role === "assistant");
+    const fullText = lastMessage?.content?.map(c => (c.type === "text" ? c.text.value : "")).join("\n");
+
+    return new Response(JSON.stringify({ reply: fullText, threadId: finalThreadId }), {
+      headers: { "content-type": "application/json" },
+    });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message || "Unknown error" }), {
+    console.error("/api/assistant error:", err);
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
       headers: { "content-type": "application/json" },
     });
   }
-};
+}
