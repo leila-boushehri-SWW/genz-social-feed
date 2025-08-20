@@ -42,6 +42,8 @@ export default async function handler(req: Request) {
       assistant_id: process.env.OPENAI_ASSISTANT_ID!,
     });
 
+    console.log(\"🤖 Using assistant ID:\", process.env.OPENAI_ASSISTANT_ID);
+    
     // Poll until completed or failed
     let runStatus = run;
     for (let i = 0; i < 20; i++) {
